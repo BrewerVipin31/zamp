@@ -1,0 +1,58 @@
+[
+  {
+    "file": "01_happy_path_shree_ganesh.pdf",
+    "label": "Happy path",
+    "scenario": "Clean digital PDF, explicit PO, quantities and prices match PO-4501.",
+    "expected": "APPROVED",
+    "vendor": "Shree Ganesh Packaging Pvt Ltd",
+    "total": 119180.0
+  },
+  {
+    "file": "02_edge_scanned_no_po_kaveri.pdf",
+    "label": "Edge 1 - Scanned, no PO reference",
+    "scenario": "Image-only scan (no text layer) and no PO number. Process must OCR it, then infer the right PO among the vendor's 2 open POs.",
+    "expected": "APPROVED",
+    "vendor": "Kaveri Office Solutions",
+    "total": 92748.0
+  },
+  {
+    "file": "03_edge_split_billing_overrun_apex.pdf",
+    "label": "Edge 2 - Split billing overruns the PO",
+    "scenario": "Second partial invoice on PO-4503. 6 of 10 pumps already billed and paid; this invoice bills 5 more, i.e. 1 pump beyond the PO.",
+    "expected": "ON HOLD",
+    "vendor": "Apex Industrial Supplies",
+    "total": 295000.0
+  },
+  {
+    "file": "04_edge_disguised_duplicate_nimbus.pdf",
+    "label": "Edge 3 - Disguised duplicate",
+    "scenario": "Re-sent invoice already paid on 12-Nov as NCS-INV-2026-0117. Different number formatting, different file, same bill.",
+    "expected": "REJECTED",
+    "vendor": "Nimbus Cloud Services LLP",
+    "total": 162840.0
+  },
+  {
+    "file": "05_edge_bank_details_changed_shree_ganesh.pdf",
+    "label": "Edge 4 - Bank details changed (payment fraud signal)",
+    "scenario": "Everything matches the PO perfectly, but the remit-to bank account differs from the vendor master - the classic invoice-fraud pattern.",
+    "expected": "ON HOLD",
+    "vendor": "Shree Ganesh Packaging Pvt Ltd",
+    "total": 215940.0
+  },
+  {
+    "file": "06_bonus_missing_invoice_number_nimbus.pdf",
+    "label": "Bonus - Missing invoice number",
+    "scenario": "Invoice has no invoice number, so it cannot be booked or duplicate-checked. Process drafts a request to the vendor.",
+    "expected": "ON HOLD",
+    "vendor": "Nimbus Cloud Services LLP",
+    "total": 30680.0
+  },
+  {
+    "file": "07_bonus_blocked_vendor_rapid_route.pdf",
+    "label": "Bonus - Blocked vendor",
+    "scenario": "Vendor exists but was blocked after failed KYC re-verification. Must not be paid regardless of PO match.",
+    "expected": "REJECTED",
+    "vendor": "Rapid Route Logistics Pvt Ltd",
+    "total": 94080.0
+  }
+]

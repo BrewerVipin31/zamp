@@ -1,0 +1,10 @@
+[
+  {"ledger_id": "L-9001", "vendor_id": "V002", "invoice_number": "NCS-INV-2026-0117", "invoice_date": "2026-11-03",
+   "po_number": "PO-4502", "subtotal": 138000.00, "tax_total": 24840.00, "total": 162840.00, "status": "paid", "paid_on": "2026-11-12",
+   "lines": [{"po_line": 1, "quantity": 1, "amount": 120000.00}, {"po_line": 2, "quantity": 1, "amount": 18000.00}],
+   "file_sha256": null, "source": "seed"},
+  {"ledger_id": "L-9002", "vendor_id": "V003", "invoice_number": "AIS/2026/0811", "invoice_date": "2026-10-28",
+   "po_number": "PO-4503", "subtotal": 300000.00, "tax_total": 54000.00, "total": 354000.00, "status": "paid", "paid_on": "2026-11-07",
+   "lines": [{"po_line": 1, "quantity": 6, "amount": 300000.00}],
+   "file_sha256": null, "source": "seed"}
+]

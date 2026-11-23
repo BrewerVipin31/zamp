@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ap-autopilot
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DEMO_PACING_MS
+        value: "450"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

@@ -1,0 +1,12 @@
+{
+  "price_tolerance_pct": 2.0,
+  "amount_tolerance_pct": 1.0,
+  "amount_tolerance_abs": 1000.0,
+  "rounding_tolerance_abs": 1.0,
+  "max_invoice_age_days": 180,
+  "suspected_duplicate_window_days": 30,
+  "po_inference_min_score": 0.85,
+  "description_match_min": 70,
+  "min_extraction_confidence": 0.6,
+  "allowed_gst_rates": [0, 5, 12, 18, 28]
+}

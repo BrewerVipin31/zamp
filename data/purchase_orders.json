@@ -1,0 +1,22 @@
+[
+  {"po_number": "PO-4498", "vendor_id": "V004", "po_date": "2026-10-20", "status": "open", "gst_rate": 18, "buyer": "Facilities",
+   "lines": [{"line": 1, "description": "Ergonomic office chair (mesh back)", "quantity": 12, "unit_price": 8900.00}]},
+  {"po_number": "PO-4501", "vendor_id": "V001", "po_date": "2026-11-02", "status": "open", "gst_rate": 18, "buyer": "Plant Ops",
+   "lines": [{"line": 1, "description": "Corrugated boxes 5-ply 18x12x12 in", "quantity": 2000, "unit_price": 42.50},
+             {"line": 2, "description": "Printed carton labels", "quantity": 5000, "unit_price": 3.20}]},
+  {"po_number": "PO-4502", "vendor_id": "V002", "po_date": "2026-10-01", "status": "open", "gst_rate": 18, "buyer": "IT",
+   "lines": [{"line": 1, "description": "Cloud hosting - October 2026", "quantity": 1, "unit_price": 120000.00},
+             {"line": 2, "description": "Managed backup service - October 2026", "quantity": 1, "unit_price": 18000.00}]},
+  {"po_number": "PO-4503", "vendor_id": "V003", "po_date": "2026-10-05", "status": "open", "gst_rate": 18, "buyer": "Plant Ops",
+   "lines": [{"line": 1, "description": "Hydraulic pump HP-200", "quantity": 10, "unit_price": 50000.00}]},
+  {"po_number": "PO-4504", "vendor_id": "V004", "po_date": "2026-11-04", "status": "open", "gst_rate": 18, "buyer": "Admin",
+   "lines": [{"line": 1, "description": "A4 copier paper 75 GSM (ream)", "quantity": 200, "unit_price": 245.00},
+             {"line": 2, "description": "Whiteboard markers (box of 10)", "quantity": 40, "unit_price": 380.00},
+             {"line": 3, "description": "Lever arch files", "quantity": 150, "unit_price": 96.00}]},
+  {"po_number": "PO-4505", "vendor_id": "V001", "po_date": "2026-11-06", "status": "open", "gst_rate": 18, "buyer": "Warehouse",
+   "lines": [{"line": 1, "description": "Stretch wrap film 23 micron (roll)", "quantity": 300, "unit_price": 610.00}]},
+  {"po_number": "PO-4506", "vendor_id": "V005", "po_date": "2026-10-12", "status": "open", "gst_rate": 12, "buyer": "Logistics",
+   "lines": [{"line": 1, "description": "Freight Bengaluru to Chennai (FTL)", "quantity": 3, "unit_price": 28000.00}]},
+  {"po_number": "PO-4507", "vendor_id": "V002", "po_date": "2026-11-01", "status": "open", "gst_rate": 18, "buyer": "IT",
+   "lines": [{"line": 1, "description": "SSL certificate - annual renewal", "quantity": 4, "unit_price": 6500.00}]}
+]

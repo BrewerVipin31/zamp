@@ -1,0 +1,18 @@
+[
+  {"vendor_id": "V001", "name": "Shree Ganesh Packaging Pvt Ltd", "gstin": "27AAKCS3374M1ZQ", "status": "approved",
+   "bank": {"bank_name": "HDFC Bank", "account_number": "50200012345678", "ifsc": "HDFC0000123"},
+   "contact_email": "accounts@shreeganeshpack.example", "category": "Packaging"},
+  {"vendor_id": "V002", "name": "Nimbus Cloud Services LLP", "gstin": "29AAHFN7712Q1ZI", "status": "approved",
+   "bank": {"bank_name": "ICICI Bank", "account_number": "004105012345", "ifsc": "ICIC0000041"},
+   "contact_email": "billing@nimbuscloud.example", "category": "IT services"},
+  {"vendor_id": "V003", "name": "Apex Industrial Supplies", "gstin": "09ABBFA5526H1ZK", "status": "approved",
+   "bank": {"bank_name": "State Bank of India", "account_number": "38123456789", "ifsc": "SBIN0001234"},
+   "contact_email": "finance@apexindustrial.example", "category": "Capital equipment"},
+  {"vendor_id": "V004", "name": "Kaveri Office Solutions", "gstin": "29AAGFK9043D1Z9", "status": "approved",
+   "bank": {"bank_name": "Canara Bank", "account_number": "0472101034567", "ifsc": "CNRB0000472"},
+   "contact_email": "accounts@kaverioffice.example", "category": "Office supplies"},
+  {"vendor_id": "V005", "name": "Rapid Route Logistics Pvt Ltd", "gstin": "07AAOCR6650B1ZB", "status": "blocked",
+   "status_reason": "KYC re-verification failed on 2026-10-30; payments suspended by Procurement",
+   "bank": {"bank_name": "Axis Bank", "account_number": "917020012345678", "ifsc": "UTIB0000917"},
+   "contact_email": "billing@rapidroute.example", "category": "Logistics"}
+]

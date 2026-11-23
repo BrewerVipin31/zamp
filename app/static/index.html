@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AP Autopilot - invoice to decision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="2" width="16" height="21" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 8h8M7 12h8M7 16h4" stroke="currentColor" stroke-width="2"/><circle cx="19" cy="19" r="5.5" fill="var(--ok)"/><path d="M16.6 19l1.7 1.7 3.2-3.3" stroke="#fff" stroke-width="1.8" fill="none"/></svg>
+    <div><strong>AP Autopilot</strong><span id="company">Accounts payable</span></div>
+  </div>
+  <nav role="tablist">
+    <button role="tab" data-tab="process" aria-selected="true">Process invoice</button>
+    <button role="tab" data-tab="dashboard">Dashboard</button>
+    <button role="tab" data-tab="reference">Vendors &amp; POs</button>
+  </nav>
+  <div class="top-right">
+    <span id="engine" class="engine" title="Field extraction engine"></span>
+    <button id="reset" class="ghost">Reset demo data</button>
+  </div>
+</header>
+
+<main>
+  <!-- PROCESS -->
+  <section id="tab-process" class="tab active">
+    <aside class="inbox">
+      <label id="drop" class="drop" tabindex="0">
+        <input type="file" id="file" accept="application/pdf,image/png,image/jpeg" hidden>
+        <strong>Drop an invoice here</strong>
+        <span>or click to choose a PDF, PNG or JPG</span>
+      </label>
+      <h2>Test invoices</h2>
+      <ul id="samples" class="samples"></ul>
+    </aside>
+
+    <section class="run" aria-live="polite">
+      <div class="run-head">
+        <div>
+          <h1 id="run-title">No invoice running</h1>
+          <p id="run-sub" class="muted">Pick a test invoice or drop your own to watch every step run.</p>
+        </div>
+        <span id="run-timer" class="timer"></span>
+      </div>
+      <ol id="stages" class="stages"></ol>
+    </section>
+
+    <section class="verdict">
+      <div class="vtabs" role="tablist">
+        <button data-v="decision" aria-selected="true">Decision</button>
+        <button data-v="fields">Extracted data</button>
+        <button data-v="doc">Original invoice</button>
+      </div>
+      <div id="v-decision" class="vpane active"><div class="empty">The decision appears here when the run finishes.</div></div>
+      <div id="v-fields" class="vpane"><div class="empty">Nothing extracted yet.</div></div>
+      <div id="v-doc" class="vpane"><div class="empty">No invoice loaded.</div></div>
+    </section>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard" class="tab">
+    <div class="kpis" id="kpis"></div>
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Run history</h2>
+          <div class="filters" id="filters">
+            <button data-f="ALL" aria-pressed="true">All</button>
+            <button data-f="APPROVED">Approved</button>
+            <button data-f="ON HOLD">On hold</button>
+            <button data-f="REJECTED">Rejected</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="runs">
+          <thead><tr><th>Run</th><th>Received</th><th>Vendor</th><th>Invoice</th><th class="num">Amount</th><th>Decision</th><th>Why</th><th class="num">Time</th></tr></thead>
+          <tbody id="runs"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h2>Exceptions by owner</h2>
+        <ul id="queues" class="queues"></ul>
+        <h2 class="mt">Top reasons</h2>
+        <ul id="reasons" class="queues"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- REFERENCE -->
+  <section id="tab-reference" class="tab">
+    <div class="panel"><h2>Purchase orders</h2><div class="table-wrap"><table id="po-table" class="ref"></table></div></div>
+    <div class="ref-grid">
+      <div class="panel"><h2>Vendor master</h2><div class="table-wrap"><table id="vendor-table" class="ref"></table></div></div>
+      <div class="panel"><h2>Matching rules</h2><table id="rules-table" class="ref"></table></div>
+    </div>
+    <div class="panel"><h2>Invoice ledger (paid and approved)</h2><div class="table-wrap"><table id="ledger-table" class="ref"></table></div></div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
