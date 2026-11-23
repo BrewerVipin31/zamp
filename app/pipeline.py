@@ -181,7 +181,7 @@ class Pipeline:
         if extract_llm.provider():
             try:
                 t = time.time()
-                llm_out, llm_engine = extract_llm.extract(self.bytes, self.mime)
+                llm_out, llm_engine = extract_llm.extract(self.bytes, self.mime, self.text)
                 s.log(f"LLM extraction via {llm_engine} in {time.time() - t:.1f}s")
                 primary, engine = llm_out, llm_engine
                 self._cross_check(s, llm_out, rules_out)

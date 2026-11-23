@@ -52,10 +52,15 @@ def provider() -> str | None:
 
 def model_name(p: str) -> str:
     if p == "mistral":
-        return f"{os.getenv('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')} + {os.getenv('MISTRAL_MODEL', 'mistral-small-latest')}"
+        chat = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
+        return f"{os.getenv('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')} + {chat}" if _mistral_uses_ocr() else chat
     if p == "claude":
         return os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
     return _GEMINI_AUTO or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+
+
+def _mistral_uses_ocr() -> bool:
+    return os.getenv("MISTRAL_USE_OCR", "0").lower() in ("1", "true", "yes")
 
 
 def _parse_json(text: str) -> dict:
@@ -189,24 +194,35 @@ def _mistral_post(path: str, payload: dict, key: str, deadline: float) -> dict:
     raise last
 
 
-def _call_mistral(data: bytes, mime: str) -> dict:
-    """Step 1: Mistral OCR reads the document (digital or scanned) into markdown.
-    Step 2: a Mistral chat model turns that markdown into the strict JSON schema."""
+def _call_mistral(data: bytes, mime: str, text: str | None = None) -> dict:
+    """Mistral reads the invoice text and returns the strict JSON schema.
+
+    Default: the text comes from our own reader (PDF text layer, or Tesseract for scans), so only one
+    chat call is needed - this fits the free tier's tight limits. With MISTRAL_USE_OCR=1 the document
+    is first read by Mistral OCR instead; if that is rate-limited we fall back to our own text."""
     key = os.environ["MISTRAL_API_KEY"]
     deadline = time.time() + float(os.getenv("LLM_BUDGET_S", "45"))
-    b64 = base64.b64encode(data).decode()
-    doc = ({"type": "document_url", "document_url": f"data:application/pdf;base64,{b64}"} if mime == "application/pdf"
-           else {"type": "image_url", "image_url": f"data:{mime};base64,{b64}"})
-    ocr = _mistral_post("ocr", {"model": os.getenv("MISTRAL_OCR_MODEL", "mistral-ocr-latest"), "document": doc}, key, deadline)
-    pages = ocr.get("pages") or []
-    markdown = "\n\n".join(f"--- page {p.get('index', i) + 1} ---\n{p.get('markdown', '')}" for i, p in enumerate(pages))
+    markdown = None
+    if _mistral_uses_ocr() or not (text and len(text.strip()) >= 40):
+        b64 = base64.b64encode(data).decode()
+        doc = ({"type": "document_url", "document_url": f"data:application/pdf;base64,{b64}"} if mime == "application/pdf"
+               else {"type": "image_url", "image_url": f"data:{mime};base64,{b64}"})
+        try:
+            ocr = _mistral_post("ocr", {"model": os.getenv("MISTRAL_OCR_MODEL", "mistral-ocr-latest"), "document": doc}, key, deadline)
+            pages = ocr.get("pages") or []
+            markdown = "\n\n".join(f"--- page {p.get('index', i) + 1} ---\n{p.get('markdown', '')}" for i, p in enumerate(pages))
+        except RuntimeError:
+            if not (text and text.strip()):
+                raise
+    if not (markdown and markdown.strip()):
+        markdown = text or ""
     if not markdown.strip():
-        raise RuntimeError("Mistral OCR returned no text")
+        raise RuntimeError("no invoice text available for Mistral")
     chat = _mistral_post("chat/completions", {
         "model": os.getenv("MISTRAL_MODEL", "mistral-small-latest"),
         "temperature": 0,
         "response_format": {"type": "json_object"},
-        "messages": [{"role": "user", "content": PROMPT + "\n\nThe invoice, as read by OCR (markdown):\n\n" + markdown}],
+        "messages": [{"role": "user", "content": PROMPT + "\n\nThe invoice text (line order may follow the page layout):\n\n" + markdown}],
     }, key, deadline)
     content = chat["choices"][0]["message"]["content"]
     if isinstance(content, list):  # some models return content chunks
@@ -253,9 +269,9 @@ def normalise(d: dict) -> dict:
     return out
 
 
-def extract(data: bytes, mime: str) -> tuple[dict, str]:
+def extract(data: bytes, mime: str, text: str | None = None) -> tuple[dict, str]:
     p = provider()
     if p is None:
         raise RuntimeError("no LLM provider configured")
-    raw = {"claude": _call_claude, "gemini": _call_gemini, "mistral": _call_mistral}[p](data, mime)
+    raw = _call_mistral(data, mime, text) if p == "mistral" else {"claude": _call_claude, "gemini": _call_gemini}[p](data, mime)
     return normalise(raw), f"{p}:{model_name(p)}"

@@ -68,7 +68,7 @@ Or with Docker: `docker build -t ap-autopilot . && docker run -p 8000:8000 ap-au
 
 ### Turn on the LLM extractor (optional, recommended for the demo)
 Set **one** of these environment variables before starting (if several are set, Mistral is used first, then Claude, then Gemini):
-- `MISTRAL_API_KEY=...` (free "Experiment" plan at console.mistral.ai). Uses Mistral OCR (`mistral-ocr-latest`) to read the document, then `mistral-small-latest` to produce the JSON. Override with `MISTRAL_OCR_MODEL` / `MISTRAL_MODEL`.
+- `MISTRAL_API_KEY=...` (free "Experiment" plan at console.mistral.ai). By default the invoice text comes from the app's own reader (PDF text layer, or Tesseract for scans) and `mistral-small-latest` turns it into the JSON fields: one call per invoice, which fits the free tier. Set `MISTRAL_USE_OCR=1` to have Mistral OCR read the document instead; if OCR is rate-limited, the app falls back to its own text. Override models with `MISTRAL_MODEL` / `MISTRAL_OCR_MODEL`.
 - `GEMINI_API_KEY=...` (free key from Google AI Studio). If the configured model is retired or overloaded, the app retries and then fails over to another Flash model the key can use.
 - `ANTHROPIC_API_KEY=...`. Default model is `claude-haiku-5-5`; override it with `ANTHROPIC_MODEL`.
 
