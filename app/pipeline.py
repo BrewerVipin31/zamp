@@ -187,7 +187,7 @@ class Pipeline:
                 self._cross_check(s, llm_out, rules_out)
             except Exception as e:
                 s.check("LLM_FALLBACK", "LLM extraction", "warn",
-                        f"LLM unavailable ({type(e).__name__}); fell back to deterministic rules engine")
+                        f"LLM unavailable ({str(e)[:200] or type(e).__name__}); fell back to deterministic rules engine")
         else:
             s.log("No LLM key configured - using deterministic rules engine")
 

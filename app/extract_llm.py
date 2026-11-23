@@ -10,6 +10,8 @@ import re
 
 import httpx
 
+_GEMINI_AUTO: str | None = None  # model picked automatically if the configured one is unavailable
+
 PROMPT = """You are an accounts-payable data extraction engine. Read the attached vendor invoice and return ONLY a JSON object, no prose, with exactly these keys:
 
 {
@@ -49,7 +51,9 @@ def provider() -> str | None:
 
 
 def model_name(p: str) -> str:
-    return os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5") if p == "claude" else os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    if p == "claude":
+        return os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
+    return _GEMINI_AUTO or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 def _parse_json(text: str) -> dict:
@@ -73,24 +77,67 @@ def _call_claude(data: bytes, mime: str) -> dict:
               "messages": [{"role": "user", "content": [block, {"type": "text", "text": PROMPT}]}]},
         timeout=40,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise _api_error(r, "Claude")
     text = "".join(c.get("text", "") for c in r.json()["content"] if c.get("type") == "text")
     return _parse_json(text)
 
 
+def _api_error(r: httpx.Response, who: str) -> RuntimeError:
+    """Readable error with the HTTP status and the provider's own message (never includes the key)."""
+    try:
+        msg = r.json().get("error", {}).get("message", "")
+    except Exception:
+        msg = r.text[:200]
+    return RuntimeError(f"{who} HTTP {r.status_code}: {msg[:180]}")
+
+
+def _pick_gemini_model(key: str) -> str | None:
+    """Ask the API which models this key can use and pick the newest stable general Flash model."""
+    r = httpx.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": key, "pageSize": 200}, timeout=20)
+    if r.status_code != 200:
+        return None
+    best, best_ver = None, ()
+    for m in r.json().get("models", []):
+        name = m.get("name", "").removeprefix("models/")
+        if "generateContent" not in m.get("supportedGenerationMethods", []) or "flash" not in name:
+            continue
+        if any(t in name for t in ("lite", "image", "tts", "live", "audio", "transcribe", "exp", "thinking", "8b")):
+            continue
+        ver = tuple(int(n) for n in re.findall(r"\d+", name.split("flash")[0]))
+        stable = "preview" not in name
+        rank = (stable, ver)
+        if best is None or rank > best_ver:
+            best, best_ver = name, rank
+    return best
+
+
 def _call_gemini(data: bytes, mime: str) -> dict:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name('gemini')}:generateContent"
-    r = httpx.post(
-        url,
-        params={"key": os.environ["GEMINI_API_KEY"]},
-        json={"contents": [{"parts": [{"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}},
-                                      {"text": PROMPT}]}],
-              "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}},
-        timeout=40,
-    )
-    r.raise_for_status()
-    parts = r.json()["candidates"][0]["content"]["parts"]
-    return _parse_json("".join(p.get("text", "") for p in parts))
+    global _GEMINI_AUTO
+    key = os.environ["GEMINI_API_KEY"]
+    body = {"contents": [{"parts": [{"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}},
+                                    {"text": PROMPT}]}],
+            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
+
+    def post(model):
+        return httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                          params={"key": key}, json=body, timeout=40)
+
+    model = _GEMINI_AUTO or model_name("gemini")
+    r = post(model)
+    if r.status_code == 404 and not _GEMINI_AUTO:  # configured model retired / renamed -> discover one
+        picked = _pick_gemini_model(key)
+        if picked and picked != model:
+            _GEMINI_AUTO, model = picked, picked
+            r = post(model)
+    if r.status_code != 200:
+        raise _api_error(r, "Gemini")
+    cand = (r.json().get("candidates") or [{}])[0]
+    parts = cand.get("content", {}).get("parts", [])
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    if not text:
+        raise RuntimeError(f"Gemini returned no text (finishReason {cand.get('finishReason')})")
+    return _parse_json(text)
 
 
 def normalise(d: dict) -> dict:
