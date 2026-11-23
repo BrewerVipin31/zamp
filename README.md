@@ -67,8 +67,9 @@ uvicorn app.main:app --port 8000
 Or with Docker: `docker build -t ap-autopilot . && docker run -p 8000:8000 ap-autopilot`
 
 ### Turn on the LLM extractor (optional, recommended for the demo)
-Set **one** of these environment variables before starting:
-- `GEMINI_API_KEY=...` (free key from Google AI Studio). Default model is `gemini-2.5-flash`; override it with `GEMINI_MODEL` if Google has retired it.
+Set **one** of these environment variables before starting (if several are set, Mistral is used first, then Claude, then Gemini):
+- `MISTRAL_API_KEY=...` (free "Experiment" plan at console.mistral.ai). Uses Mistral OCR (`mistral-ocr-latest`) to read the document, then `mistral-small-latest` to produce the JSON. Override with `MISTRAL_OCR_MODEL` / `MISTRAL_MODEL`.
+- `GEMINI_API_KEY=...` (free key from Google AI Studio). If the configured model is retired or overloaded, the app retries and then fails over to another Flash model the key can use.
 - `ANTHROPIC_API_KEY=...`. Default model is `claude-haiku-5-5`; override it with `ANTHROPIC_MODEL`.
 
 With no key, the app runs fully offline on OCR + rules (all scenarios pass). With a key, the badge in the top bar changes, and every run shows an "LLM vs OCR cross-check" line. `EXTRACTOR=rules` forces offline mode, which is a safe fallback if the Wi-Fi fails mid-interview.
@@ -126,7 +127,7 @@ python tools/generate_samples.py  # regenerate the test invoices
 ```
 app/main.py            FastAPI: runs, live SSE stage stream, history, reference data, reset
 app/pipeline.py        the 7 stages and all decision rules
-app/extract_llm.py     Claude / Gemini document extraction (strict JSON, nulls for missing)
+app/extract_llm.py     Mistral / Claude / Gemini document extraction (strict JSON, nulls for missing)
 app/extract_rules.py   offline extractor for text-layer and OCR text
 app/gstin.py           GSTIN format + checksum
 app/store.py           vendor master, POs, rules, ledger, SQLite run history

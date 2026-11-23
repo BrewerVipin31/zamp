@@ -1,4 +1,4 @@
-"""LLM-based extractor (Claude or Gemini). Reads the PDF/image directly, including scans.
+"""LLM-based extractor (Mistral, Claude or Gemini). Reads the PDF/image directly, including scans.
 
 The LLM only *reads* the invoice. It never decides anything - all decisions are
 deterministic rules in pipeline.py, so every outcome is explainable and auditable.
@@ -7,12 +7,13 @@ import base64
 import json
 import os
 import re
+import time
 
 import httpx
 
 _GEMINI_AUTO: str | None = None  # model picked automatically if the configured one is unavailable
 
-PROMPT = """You are an accounts-payable data extraction engine. Read the attached vendor invoice and return ONLY a JSON object, no prose, with exactly these keys:
+PROMPT = """You are an accounts-payable data extraction engine. Read the vendor invoice and return ONLY a JSON object, no prose, with exactly these keys:
 
 {
   "vendor_name": string|null,          // the SELLER issuing the invoice
@@ -43,14 +44,15 @@ def provider() -> str | None:
     forced = os.getenv("EXTRACTOR", "auto").lower()
     if forced == "rules":
         return None
-    if os.getenv("ANTHROPIC_API_KEY") and forced in ("auto", "claude"):
-        return "claude"
-    if os.getenv("GEMINI_API_KEY") and forced in ("auto", "gemini"):
-        return "gemini"
+    for name, env in (("mistral", "MISTRAL_API_KEY"), ("claude", "ANTHROPIC_API_KEY"), ("gemini", "GEMINI_API_KEY")):
+        if os.getenv(env) and forced in ("auto", name):
+            return name
     return None
 
 
 def model_name(p: str) -> str:
+    if p == "mistral":
+        return f"{os.getenv('MISTRAL_OCR_MODEL', 'mistral-ocr-latest')} + {os.getenv('MISTRAL_MODEL', 'mistral-small-latest')}"
     if p == "claude":
         return os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
     return _GEMINI_AUTO or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
@@ -92,52 +94,124 @@ def _api_error(r: httpx.Response, who: str) -> RuntimeError:
     return RuntimeError(f"{who} HTTP {r.status_code}: {msg[:180]}")
 
 
-def _pick_gemini_model(key: str) -> str | None:
-    """Ask the API which models this key can use and pick the newest stable general Flash model."""
-    r = httpx.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": key, "pageSize": 200}, timeout=20)
+_SKIP = ("lite", "image", "tts", "live", "audio", "transcribe", "exp", "thinking", "8b", "embedding")
+
+
+def _gemini_candidates(key: str) -> list[str]:
+    """Models this key can use for generateContent: general Flash models, stable before preview, newest first."""
+    try:
+        r = httpx.get("https://generativelanguage.googleapis.com/v1beta/models", params={"key": key, "pageSize": 200}, timeout=15)
+    except httpx.HTTPError:
+        return []
     if r.status_code != 200:
-        return None
-    best, best_ver = None, ()
+        return []
+    ranked = []
     for m in r.json().get("models", []):
         name = m.get("name", "").removeprefix("models/")
-        if "generateContent" not in m.get("supportedGenerationMethods", []) or "flash" not in name:
-            continue
-        if any(t in name for t in ("lite", "image", "tts", "live", "audio", "transcribe", "exp", "thinking", "8b")):
+        if "generateContent" not in m.get("supportedGenerationMethods", []) or "flash" not in name or any(t in name for t in _SKIP):
             continue
         ver = tuple(int(n) for n in re.findall(r"\d+", name.split("flash")[0]))
-        stable = "preview" not in name
-        rank = (stable, ver)
-        if best is None or rank > best_ver:
-            best, best_ver = name, rank
-    return best
+        ranked.append((("preview" not in name), ver, name))
+    ranked.sort(reverse=True)
+    return [n for _, _, n in ranked]
+
+
+def _pick_gemini_model(key: str) -> str | None:
+    c = _gemini_candidates(key)
+    return c[0] if c else None
 
 
 def _call_gemini(data: bytes, mime: str) -> dict:
+    """Try the preferred model; on overload (429/500/503) retry once, then fail over to other Flash models.
+    On 404 (model retired) move to the next model. Auth/request errors (400/401/403) stop immediately."""
     global _GEMINI_AUTO
     key = os.environ["GEMINI_API_KEY"]
     body = {"contents": [{"parts": [{"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}},
                                     {"text": PROMPT}]}],
             "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
+    deadline = time.time() + float(os.getenv("LLM_BUDGET_S", "30"))
+    preferred = _GEMINI_AUTO or model_name("gemini")
+    queue, tried, last = [preferred], set(), None
+    listed = False
+    while queue and time.time() < deadline:
+        model = queue.pop(0)
+        if model in tried:
+            continue
+        tried.add(model)
+        for attempt in range(2):
+            try:
+                r = httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                               params={"key": key}, json=body, timeout=max(5, min(40, deadline - time.time())))
+            except httpx.HTTPError as e:
+                last = RuntimeError(f"Gemini network error on {model}: {type(e).__name__}")
+                break
+            if r.status_code == 200:
+                cand = (r.json().get("candidates") or [{}])[0]
+                parts = cand.get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+                if not text:
+                    last = RuntimeError(f"Gemini {model} returned no text (finishReason {cand.get('finishReason')})")
+                    break
+                if model != preferred:
+                    _GEMINI_AUTO = model  # remember the model that worked
+                return _parse_json(text)
+            last = _api_error(r, f"Gemini ({model})")
+            if r.status_code in (429, 500, 503) and attempt == 0 and time.time() + 2 < deadline:
+                time.sleep(1.5)
+                continue
+            if r.status_code in (400, 401, 403):
+                raise last
+            break  # 404 or still overloaded -> next model
+        if not listed:
+            listed = True
+            queue += [m for m in _gemini_candidates(key)[:4] if m not in tried]
+    raise last or RuntimeError("Gemini: no model available")
 
-    def post(model):
-        return httpx.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                          params={"key": key}, json=body, timeout=40)
 
-    model = _GEMINI_AUTO or model_name("gemini")
-    r = post(model)
-    if r.status_code == 404 and not _GEMINI_AUTO:  # configured model retired / renamed -> discover one
-        picked = _pick_gemini_model(key)
-        if picked and picked != model:
-            _GEMINI_AUTO, model = picked, picked
-            r = post(model)
-    if r.status_code != 200:
-        raise _api_error(r, "Gemini")
-    cand = (r.json().get("candidates") or [{}])[0]
-    parts = cand.get("content", {}).get("parts", [])
-    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-    if not text:
-        raise RuntimeError(f"Gemini returned no text (finishReason {cand.get('finishReason')})")
-    return _parse_json(text)
+def _mistral_post(path: str, payload: dict, key: str, deadline: float) -> dict:
+    """POST to Mistral with one retry on rate-limit / overload (free tier allows ~1 request/second)."""
+    last = None
+    for attempt in range(3):
+        r = httpx.post(f"https://api.mistral.ai/v1/{path}", json=payload,
+                       headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                       timeout=max(5, min(60, deadline - time.time())))
+        if r.status_code == 200:
+            return r.json()
+        try:
+            msg = r.json().get("message") or r.json().get("detail") or r.text[:180]
+        except Exception:
+            msg = r.text[:180]
+        last = RuntimeError(f"Mistral {path} HTTP {r.status_code}: {str(msg)[:180]}")
+        if r.status_code in (429, 500, 502, 503) and attempt < 2 and time.time() + 3 < deadline:
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        break
+    raise last
+
+
+def _call_mistral(data: bytes, mime: str) -> dict:
+    """Step 1: Mistral OCR reads the document (digital or scanned) into markdown.
+    Step 2: a Mistral chat model turns that markdown into the strict JSON schema."""
+    key = os.environ["MISTRAL_API_KEY"]
+    deadline = time.time() + float(os.getenv("LLM_BUDGET_S", "45"))
+    b64 = base64.b64encode(data).decode()
+    doc = ({"type": "document_url", "document_url": f"data:application/pdf;base64,{b64}"} if mime == "application/pdf"
+           else {"type": "image_url", "image_url": f"data:{mime};base64,{b64}"})
+    ocr = _mistral_post("ocr", {"model": os.getenv("MISTRAL_OCR_MODEL", "mistral-ocr-latest"), "document": doc}, key, deadline)
+    pages = ocr.get("pages") or []
+    markdown = "\n\n".join(f"--- page {p.get('index', i) + 1} ---\n{p.get('markdown', '')}" for i, p in enumerate(pages))
+    if not markdown.strip():
+        raise RuntimeError("Mistral OCR returned no text")
+    chat = _mistral_post("chat/completions", {
+        "model": os.getenv("MISTRAL_MODEL", "mistral-small-latest"),
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [{"role": "user", "content": PROMPT + "\n\nThe invoice, as read by OCR (markdown):\n\n" + markdown}],
+    }, key, deadline)
+    content = chat["choices"][0]["message"]["content"]
+    if isinstance(content, list):  # some models return content chunks
+        content = "".join(c.get("text", "") for c in content if isinstance(c, dict))
+    return _parse_json(content)
 
 
 def normalise(d: dict) -> dict:
@@ -183,5 +257,5 @@ def extract(data: bytes, mime: str) -> tuple[dict, str]:
     p = provider()
     if p is None:
         raise RuntimeError("no LLM provider configured")
-    raw = _call_claude(data, mime) if p == "claude" else _call_gemini(data, mime)
+    raw = {"claude": _call_claude, "gemini": _call_gemini, "mistral": _call_mistral}[p](data, mime)
     return normalise(raw), f"{p}:{model_name(p)}"
